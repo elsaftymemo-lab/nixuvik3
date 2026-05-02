@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>اقرأ | Iqra - المكتبة الذكية</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { colors: { ytDark: '#0f0f0f', ytCard: '#212121', ytHover: '#383838' } } }
+    }
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+  <style>
+    :root { --accent: #3b82f6; --radius: 12px; }
+    body { font-family: 'Cairo', sans-serif; background-color: #0f0f0f; color: #fff; }
+    .book-thumb { aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--radius); border: 1px solid #333; width: 100%; }
+    .custom-radius { border-radius: var(--radius); }
+    .skeleton { background: linear-gradient(90deg,#1a1a1a 25%,#2a2a2a 50%,#1a1a1a 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: var(--radius); }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    #toast { position:fixed; top:-100px; left:50%; transform:translateX(-50%); padding:12px 24px; border-radius:8px; font-weight:bold; z-index:9999; transition:0.4s; color:#fff; white-space:nowrap; }
+    #toast.show { top:20px; }
+    ::-webkit-scrollbar { width:8px; }
+    ::-webkit-scrollbar-thumb { background:#444; border-radius:4px; }
+    .chat-bubble { max-width:75%; padding:10px 14px; border-radius:var(--radius); font-size:14px; line-height:1.5; word-break:break-word; }
+    .bubble-ai, .bubble-other { align-self:flex-start; background:#272727; color:#fff; border-top-right-radius:2px; }
+    .bubble-user { align-self:flex-end; background:var(--accent); color:#fff; border-top-left-radius:2px; }
+    .progress-bar { height:4px; background:#333; border-radius:2px; overflow:hidden; }
+    .progress-fill { height:100%; background:var(--accent); transition:width 0.3s; border-radius:2px; }
+    .drop-zone { border:2px dashed #444; transition:0.2s; }
+    .drop-zone.drag-over { border-color:var(--accent); background:rgba(59,130,246,0.05); }
+  </style>
+</head>
+<body class="bg-white dark:bg-ytDark text-black dark:text-white flex h-screen overflow-hidden">
+
+<div id="toast"></div>
+
+<!-- AUTH -->
+<div id="authModal" class="fixed inset-0 bg-black/90 z-[2000] flex items-center justify-center">
+  <div class="bg-white dark:bg-ytCard p-8 custom-radius w-full max-w-sm shadow-2xl">
+    <div class="flex justify-center mb-6">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
+        <path d="M4 19.5C4 18.1193 5.11929 17 6.5 17H20" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6.5 2H20V22H6.5C5.11929 22 4 20.8807 4 19.5V4.5C4 3.11929 5.11929 2 6.5 2Z" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="12" cy="10" r="3" stroke="var(--accent)" stroke-width="2"/>
+      </svg>
+    </div>
+    <h2 class="text-2xl font-black mb-2 text-center">اقرأ — Iqra</h2>
+    <p class="text-center text-sm opacity-40 mb-6 font-bold">أدخل اسمك وكلمة مرور — التسجيل تلقائي</p>
+    <input id="authUser" type="text" placeholder="اسم المستخدم" class="w-full bg-gray-100 dark:bg-ytHover p-3 custom-radius mb-3 outline-none font-bold">
+    <input id="authPass" type="password" placeholder="كلمة المرور" class="w-full bg-gray-100 dark:bg-ytHover p-3 custom-radius mb-3 outline-none font-bold" onkeydown="if(event.key==='Enter')handleAuth()">
+    <p id="authError" class="text-red-400 text-sm font-bold mb-3 hidden text-center"></p>
+    <button onclick="handleAuth()" class="w-full bg-accent text-white py-3 custom-radius font-bold mb-3 hover:opacity-90 transition">دخول / تسجيل</button>
+    <button onclick="guestMode()" class="w-full text-gray-500 font-bold text-sm hover:text-accent transition">تصفح كضيف</button>
+  </div>
+</div>
+
+<!-- SIDEBAR -->
+<aside class="w-64 h-full border-l border-gray-200 dark:border-gray-800 p-4 hidden md:flex flex-col shrink-0">
+  <div class="mb-10 px-2 flex items-center gap-3">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+      <path d="M4 19.5C4 18.1193 5.11929 17 6.5 17H20" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M6.5 2H20V22H6.5C5.11929 22 4 20.8807 4 19.5V4.5C4 3.11929 5.11929 2 6.5 2Z" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M9 7H15" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <h1 class="text-2xl font-black">اقرأ</h1>
+  </div>
+  <nav class="space-y-1 flex-1">
+    <button onclick="switchTab('home')"     class="nav-btn w-full flex items-center gap-4 px-4 py-3 custom-radius font-bold transition" data-tab="home">🏠 الرئيسية</button>
+    <button onclick="switchTab('library')"  class="nav-btn w-full flex items-center gap-4 px-4 py-3 custom-radius font-bold transition" data-tab="library">📖 مكتبتي</button>
+    <button onclick="switchTab('learning')" class="nav-btn w-full flex items-center gap-4 px-4 py-3 custom-radius font-bold transition" data-tab="learning">🎓 التعليم</button>
+    <button onclick="switchTab('daleel')"   class="nav-btn w-full flex items-center gap-4 px-4 py-3 custom-radius font-bold transition" data-tab="daleel">✨ دليل</button>
+    <button onclick="switchTab('chat')"     class="nav-btn w-full flex items-center gap-4 px-4 py-3 custom-radius font-bold transition" data-tab="chat">💬 الدردشة</button>
+    <button onclick="switchTab('settings')" class="nav-btn w-full flex items-center gap-4 px-4 py-3 custom-radius font-bold transition" data-tab="settings">⚙️ الإعدادات</button>
+  </nav>
+  <div class="mt-auto p-4 bg-gray-100 dark:bg-ytCard custom-radius flex items-center gap-3">
+    <div id="sideAvatar" class="w-10 h-10 rounded-full bg-accent flex items-center justify-center font-bold text-white">G</div>
+    <p id="sideName" class="text-sm font-bold truncate">Guest</p>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="flex-1 flex flex-col h-full overflow-hidden">
+  <header class="h-16 flex items-center justify-between px-6 border-b border-gray-200 dark:border-gray-800 shrink-0">
+    <div class="md:hidden font-black text-accent">اقرأ</div>
+    <div class="flex-1 max-w-xl mx-4 hidden sm:block relative">
+      <input id="searchInput" type="text" oninput="renderBooks()" placeholder="ابحث في الكتب..." class="w-full bg-gray-100 dark:bg-ytCard border border-gray-300 dark:border-gray-700 custom-radius px-10 py-2 outline-none font-bold text-sm">
+      <span class="absolute right-3 top-2 opacity-30">🔍</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <button onclick="openUpload()" class="bg-accent text-white px-5 py-2 custom-radius font-bold hover:opacity-90 transition">+ رفع</button>
+      <button onclick="toggleTheme()" class="w-10 h-10 custom-radius bg-gray-100 dark:bg-ytCard flex items-center justify-center text-xl hover:opacity-80 transition">🌗</button>
+    </div>
+  </header>
+
+  <div class="flex-1 overflow-y-auto p-6">
+
+    <!-- HOME -->
+    <div id="view-home" class="tab-view hidden">
+      <h2 class="text-2xl font-bold mb-6">الكتب العامة</h2>
+      <div id="homeGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6"></div>
+    </div>
+
+    <!-- LIBRARY -->
+    <div id="view-library" class="tab-view hidden">
+      <h2 class="text-2xl font-bold mb-6">مكتبتي الخاصة</h2>
+      <div id="libGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6"></div>
+    </div>
+
+    <!-- LEARNING -->
+    <div id="view-learning" class="tab-view hidden">
+      <h2 class="text-2xl font-bold mb-6">🎓 الكتب التعليمية</h2>
+      <div id="learnGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6"></div>
+    </div>
+
+    <!-- DALEEL -->
+    <div id="view-daleel" class="tab-view hidden flex flex-col max-w-3xl mx-auto" style="height:calc(100vh - 10rem)">
+      <h2 class="text-2xl font-bold mb-4">✨ دليل — المساعد الذكي</h2>
+      <div id="daleelBox" class="flex-1 bg-gray-100 dark:bg-ytCard custom-radius p-4 overflow-y-auto flex flex-col gap-3 border border-gray-800 min-h-0">
+        <div class="chat-bubble bubble-ai">مرحباً! أنا دليل، مساعدك في مكتبة اقرأ. كيف يمكنني مساعدتك اليوم؟</div>
+      </div>
+      <div class="mt-4 flex gap-2">
+        <input id="daleelInput" type="text" placeholder="اسأل دليل..." class="flex-1 bg-ytHover p-3 rounded-full outline-none text-sm px-5 font-bold" onkeydown="if(event.key==='Enter')sendDaleel()">
+        <button onclick="sendDaleel()" class="bg-accent px-6 rounded-full font-bold text-sm hover:opacity-90 transition">اسأل</button>
+      </div>
+    </div>
+
+    <!-- CHAT -->
+    <div id="view-chat" class="tab-view hidden flex flex-col max-w-2xl mx-auto" style="height:calc(100vh - 10rem)">
+      <h2 class="text-2xl font-bold mb-4">💬 الدردشة العامة</h2>
+      <div id="chatBox" class="flex-1 bg-gray-100 dark:bg-ytCard custom-radius p-4 overflow-y-auto flex flex-col gap-3 border border-gray-800 min-h-0"></div>
+      <div class="mt-4 flex gap-2">
+        <input id="chatInput" type="text" placeholder="اكتب رسالة..." class="flex-1 bg-ytHover p-3 rounded-full outline-none text-sm px-5 font-bold" onkeydown="if(event.key==='Enter')sendChat()">
+        <button onclick="sendChat()" class="bg-accent px-6 rounded-full font-bold text-sm hover:opacity-90 transition">إرسال</button>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="view-settings" class="tab-view hidden max-w-md">
+      <h2 class="text-2xl font-bold mb-8">⚙️ الإعدادات</h2>
+      <div class="space-y-8 bg-ytCard p-6 custom-radius border border-gray-800">
+        <div>
+          <label class="block text-sm opacity-50 mb-3 font-bold">المظهر</label>
+          <div class="flex gap-2">
+            <button onclick="setTheme('dark')"  class="flex-1 p-3 custom-radius bg-ytDark border border-ytHover font-bold hover:bg-ytHover transition">داكن</button>
+            <button onclick="setTheme('light')" class="flex-1 p-3 custom-radius bg-white text-black border border-gray-200 font-bold hover:bg-gray-100 transition">فاتح</button>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm opacity-50 mb-3 font-bold">حواف العناصر</label>
+          <div class="flex gap-2">
+            <button onclick="setRadius('0px')"  class="flex-1 p-2 border border-ytHover font-bold hover:bg-ytHover transition">Sharp</button>
+            <button onclick="setRadius('12px')" class="flex-1 p-2 rounded-xl bg-ytHover font-bold">Mid</button>
+            <button onclick="setRadius('30px')" class="flex-1 p-2 rounded-full bg-ytHover font-bold">Round</button>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm opacity-50 mb-3 font-bold">ألوان التمييز</label>
+          <div class="grid grid-cols-4 gap-3">
+            <div onclick="setAccent('#3b82f6')" class="h-10 rounded-lg bg-blue-500   cursor-pointer hover:scale-110 transition"></div>
+            <div onclick="setAccent('#ef4444')" class="h-10 rounded-lg bg-red-500    cursor-pointer hover:scale-110 transition"></div>
+            <div onclick="setAccent('#10b981')" class="h-10 rounded-lg bg-green-500  cursor-pointer hover:scale-110 transition"></div>
+            <div onclick="setAccent('#ffffff')" class="h-10 rounded-lg bg-white border border-gray-400 cursor-pointer hover:scale-110 transition"></div>
+            <div onclick="setAccent('#ec4899')" class="h-10 rounded-lg bg-pink-500   cursor-pointer hover:scale-110 transition"></div>
+            <div onclick="setAccent('#06b6d4')" class="h-10 rounded-lg bg-cyan-500   cursor-pointer hover:scale-110 transition"></div>
+            <div onclick="setAccent('#f97316')" class="h-10 rounded-lg bg-orange-500 cursor-pointer hover:scale-110 transition"></div>
+            <div onclick="setAccent('#8b5cf6')" class="h-10 rounded-lg bg-purple-500 cursor-pointer hover:scale-110 transition"></div>
+          </div>
+        </div>
+        <div class="border-t border-gray-700 pt-6">
+          <button onclick="logout()" class="w-full p-3 custom-radius border border-red-500/40 text-red-400 font-bold hover:bg-red-500/10 transition">تسجيل الخروج</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- UPLOAD MODAL -->
+<div id="uploadModal" class="fixed inset-0 bg-black/90 z-[2000] hidden items-center justify-center p-4">
+  <div class="bg-white dark:bg-ytCard p-8 custom-radius w-full max-w-md shadow-2xl">
+    <h3 class="text-xl font-black mb-6 text-center">رفع كتاب جديد</h3>
+
+    <input type="file" id="fileIn" accept=".pdf" class="hidden" onchange="handleFileChosen(event)">
+
+    <div id="dropZone" class="drop-zone custom-radius p-12 text-center cursor-pointer hover:border-accent transition"
+         onclick="document.getElementById('fileIn').click()"
+         ondragover="event.preventDefault();this.classList.add('drag-over')"
+         ondragleave="this.classList.remove('drag-over')"
+         ondrop="handleDrop(event)">
+      <span class="text-5xl">📄</span>
+      <p class="mt-4 font-bold" id="dropLabel">اختر ملف PDF أو اسحبه هنا</p>
+      <p class="text-xs opacity-40 mt-1">حجم أقصى: 500MB</p>
+    </div>
+
+    <!-- Upload progress (hidden until upload starts) -->
+    <div id="uploadProgress" class="hidden mt-4">
+      <div class="flex justify-between text-sm font-bold mb-2">
+        <span id="uploadStatus">جاري الرفع...</span>
+        <span id="uploadPct">0%</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div class="mt-6 flex flex-col gap-3">
+      <div class="flex items-center justify-between bg-gray-50 dark:bg-ytHover/20 p-3 custom-radius">
+        <label class="font-bold text-sm">كتاب عام للجميع</label>
+        <input type="checkbox" id="isPub" checked class="w-5 h-5 accent-blue-500">
+      </div>
+      <div class="flex items-center justify-between bg-gray-50 dark:bg-ytHover/20 p-3 custom-radius">
+        <label class="font-bold text-sm">نشر في قسم التعليم</label>
+        <input type="checkbox" id="isLearn" class="w-5 h-5 accent-blue-500">
+      </div>
+    </div>
+
+    <button onclick="closeUpload()" id="cancelBtn" class="mt-6 w-full text-gray-500 font-bold hover:text-red-500 transition">إلغاء</button>
+  </div>
+</div>
+
+<!-- PDF VIEWER -->
+<div id="pdfModal" class="fixed inset-0 bg-black z-[3000] hidden flex-col">
+  <div class="h-14 flex justify-between items-center px-4 border-b border-white/10 bg-ytDark shrink-0">
+    <h3 id="pdfTitle" class="font-bold truncate max-w-[60%]">...</h3>
+    <div class="flex gap-3 items-center">
+      <button id="adminDelBtn" class="hidden text-red-400 font-bold text-sm hover:text-red-300 transition">حذف</button>
+      <button onclick="closeViewer()" class="bg-gray-800 px-4 py-1.5 custom-radius font-bold text-sm hover:bg-gray-700 transition">إغلاق</button>
+    </div>
+  </div>
+  <!-- iframe points to /api/pdf/:id — the server streams it with range support -->
+  <iframe id="pdfFrame" class="w-full flex-1 border-none bg-white"></iframe>
+</div>
+
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+  let currentUser = null;
+  let allBooks    = [];
+  let chatInterval = null;
+  let currentBookId = null;
+  let chosenFile = null; // The File object waiting to be uploaded
+
+  // ── UTILS ─────────────────────────────────────────────────────────────────
+  function esc(str) {
+    return String(str ?? '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function showToast(msg, color) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = color || '#ef4444';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  async function apiFetch(url, opts) {
+    const res = await fetch(url, opts);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  // ── AUTH ──────────────────────────────────────────────────────────────────
+  window.onload = () => {
+    const saved = localStorage.getItem('iqra_user');
+    if (saved) { currentUser = JSON.parse(saved); loginSuccess(); }
+    // authModal is visible by default (no hidden class)
+  };
+
+  async function handleAuth() {
+    const username = document.getElementById('authUser').value.trim();
+    const password = document.getElementById('authPass').value.trim();
+    const errEl    = document.getElementById('authError');
+    errEl.classList.add('hidden');
+
+    if (!username || !password) {
+      errEl.textContent = 'يرجى إدخال الاسم وكلمة المرور';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    try {
+      const data = await apiFetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      currentUser = data;
+      localStorage.setItem('iqra_user', JSON.stringify(currentUser));
+      loginSuccess();
+    } catch(e) {
+      errEl.textContent = e.message;
+      errEl.classList.remove('hidden');
+    }
+  }
+
+  function guestMode() {
+    currentUser = { username: 'ضيف' + Math.floor(Math.random()*999), settings: { theme:'dark', accent:'#3b82f6', radius:'12px' } };
+    loginSuccess();
+  }
+
+  function loginSuccess() {
+    document.getElementById('authModal').classList.add('hidden');
+    document.getElementById('sideName').textContent  = currentUser.username;
+    document.getElementById('sideAvatar').textContent = currentUser.username[0].toUpperCase();
+    loadTheme();
+    switchTab('home');
+  }
+
+  function logout() {
+    localStorage.removeItem('iqra_user');
+    location.reload();
+  }
+
+  // ── TABS ──────────────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-view').forEach(v => v.classList.add('hidden'));
+    document.getElementById('view-' + tab).classList.remove('hidden');
+
+    document.querySelectorAll('.nav-btn').forEach(b => {
+      const active = b.dataset.tab === tab;
+      b.classList.toggle('bg-accent/10', active);
+      b.classList.toggle('text-accent',  active);
+      b.classList.toggle('text-gray-500', !active);
+      b.classList.toggle('hover:bg-ytHover', !active);
+    });
+
+    if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
+
+    if (tab === 'home')     loadBooks('public');
+    if (tab === 'library')  loadBooks('mine');
+    if (tab === 'learning') loadBooks('learning');
+    if (tab === 'chat')     { loadChat(); chatInterval = setInterval(loadChat, 5000); }
+  }
+
+  // ── BOOKS ─────────────────────────────────────────────────────────────────
+  async function loadBooks(type) {
+    const gridMap = { public:'homeGrid', mine:'libGrid', learning:'learnGrid' };
+    const gridId  = gridMap[type];
+    document.getElementById(gridId).innerHTML =
+      '<div class="skeleton h-72 col-span-2"></div><div class="skeleton h-72"></div><div class="skeleton h-72"></div>';
+    try {
+      allBooks = await apiFetch(`/api/books?mode=${type}&type=${type}&user=${encodeURIComponent(currentUser.username)}`);
+      renderBooks();
+    } catch(e) {
+      document.getElementById(gridId).innerHTML =
+        `<p class="col-span-full text-center text-red-400 py-20 font-bold">خطأ: ${esc(e.message)}</p>`;
+    }
+  }
+
+  function renderBooks() {
+    const q = (document.getElementById('searchInput').value || '').toLowerCase();
+    const filtered = allBooks.filter(b => b.title.toLowerCase().includes(q));
+    const activeGrid = document.querySelector('.tab-view:not(.hidden) .grid');
+    if (!activeGrid) return;
+
+    const FALLBACK = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300'%3E%3Crect width='200' height='300' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23888' font-size='40'%3E📄%3C/text%3E%3C/svg%3E`;
+
+    activeGrid.innerHTML = filtered.length === 0
+      ? '<p class="col-span-full text-center opacity-30 py-20 font-bold">لا توجد نتائج.</p>'
+      : filtered.map(b => `
+          <div onclick="viewBook('${esc(b.id)}')" class="group cursor-pointer">
+            <div class="relative overflow-hidden custom-radius bg-ytCard border border-white/5 shadow-xl">
+              <img src="${b.coverUrl ? esc(b.coverUrl) : FALLBACK}"
+                   class="book-thumb group-hover:scale-105 transition duration-300"
+                   onerror="this.src='${FALLBACK}'">
+              <div class="absolute bottom-2 left-2 bg-black/80 text-[9px] px-2 py-1 rounded font-bold">${esc(b.size)}</div>
+            </div>
+            <h3 class="mt-3 font-bold text-sm line-clamp-2 leading-tight">${esc(b.title)}</h3>
+            <p class="text-[10px] opacity-40 mt-1">${esc(b.date)} • ${esc(b.uploader)}</p>
+          </div>
+        `).join('');
+  }
+
+  // ── FILE SELECTION ────────────────────────────────────────────────────────
+  function handleFileChosen(e) {
+    const file = e.target.files[0];
+    if (file) setChosenFile(file);
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('dropZone').classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type === 'application/pdf') setChosenFile(file);
+    else showToast('يرجى اختيار ملف PDF فقط');
+  }
+
+  function setChosenFile(file) {
+    chosenFile = file;
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    document.getElementById('dropLabel').textContent = `✅ ${file.name} (${mb}MB)`;
+    // Auto-start upload
+    processFile();
+  }
+
+  // ── UPLOAD ────────────────────────────────────────────────────────────────
+  async function processFile() {
+    if (!chosenFile) return;
+    const file = chosenFile;
+
+    const isLearn  = document.getElementById('isLearn').checked;
+    const isPublic = document.getElementById('isPub').checked;
+
+    document.getElementById('uploadProgress').classList.remove('hidden');
+    document.getElementById('cancelBtn').disabled = true;
+    document.getElementById('cancelBtn').classList.add('opacity-40');
+
+    const setStatus = (msg, pct) => {
+      document.getElementById('uploadStatus').textContent = msg;
+      document.getElementById('uploadPct').textContent = pct + '%';
+      document.getElementById('progressFill').style.width = pct + '%';
+    };
+
+    try {
+      setStatus('جاري قراءة الملف...', 5);
+
+      // Render first page as cover using PDF.js (in memory, lightweight)
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 0.8 }); // Smaller scale = faster + smaller cover
+      const canvas = document.createElement('canvas');
+      canvas.width  = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      const coverBase64 = canvas.toDataURL('image/jpeg', 0.5);
+
+      setStatus('جاري رفع الملف...', 20);
+
+      // AI check for learning section
+      if (isLearn) {
+        setStatus('دليل يراجع المحتوى...', 25);
+        try {
+          const textContent = await page.getTextContent();
+          const snippet = textContent.items.map(s => s.str).join(' ').substring(0, 500);
+          const aiRes = await fetch('https://text.pollinations.ai/openai/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: [
+              { role: 'system', content: 'Respond only YES or NO. Is this text from an educational/scientific book?' },
+              { role: 'user', content: snippet }
+            ]})
+          });
+          if (aiRes.ok) {
+            const aiData = await aiRes.json();
+            if (!aiData.choices?.[0]?.message?.content?.includes('YES')) {
+              showToast('دليل رفض الكتاب: المحتوى ليس تعليمياً');
+              resetUploadUI();
+              return;
+            }
+          }
+        } catch { /* If AI is down, allow upload */ }
+      }
+
+      setStatus('جاري رفع الملف...', 30);
+
+      // Build FormData — the PDF goes as a real file upload, not base64
+      const formData = new FormData();
+      formData.append('pdf',          file);
+      formData.append('title',        file.name.replace('.pdf','').replace(/_/g,' '));
+      formData.append('uploader',     currentUser.username);
+      formData.append('isPublic',     String(isPublic));
+      formData.append('isLearning',   String(isLearn));
+      formData.append('coverBase64',  coverBase64);
+
+      // XHR lets us track upload progress (fetch doesn't support this yet)
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/books/upload');
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round(30 + (e.loaded / e.total) * 65);
+            setStatus('جاري الرفع...', pct);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText));
+          } else {
+            try { reject(new Error(JSON.parse(xhr.responseText).error)); }
+            catch { reject(new Error(`HTTP ${xhr.status}`)); }
+          }
+        };
+
+        xhr.onerror = () => reject(new Error('فشل الاتصال بالخادم'));
+        xhr.send(formData);
+      });
+
+      setStatus('تم! 🎉', 100);
+      showToast('تم رفع الكتاب بنجاح! 🎉', '#10b981');
+
+      setTimeout(() => {
+        closeUpload();
+        switchTab(isLearn ? 'learning' : (isPublic ? 'home' : 'library'));
+      }, 600);
+
+    } catch(err) {
+      showToast('خطأ: ' + err.message);
+      setStatus('فشل الرفع', 0);
+      resetUploadUI();
+    }
+  }
+
+  function resetUploadUI() {
+    chosenFile = null;
+    document.getElementById('fileIn').value = '';
+    document.getElementById('dropLabel').textContent = 'اختر ملف PDF أو اسحبه هنا';
+    document.getElementById('uploadProgress').classList.add('hidden');
+    document.getElementById('cancelBtn').disabled = false;
+    document.getElementById('cancelBtn').classList.remove('opacity-40');
+    document.getElementById('progressFill').style.width = '0%';
+  }
+
+  // ── VIEWER ────────────────────────────────────────────────────────────────
+  async function viewBook(id) {
+    try {
+      const b = await apiFetch('/api/books/' + id);
+      currentBookId = id;
+      document.getElementById('pdfTitle').textContent = b.title;
+
+      // Point the iframe directly at the streaming endpoint.
+      // The server sends range headers so the browser can seek without downloading everything.
+      document.getElementById('pdfFrame').src = b.pdfUrl;
+      document.getElementById('pdfModal').style.display = 'flex';
+
+      const delBtn = document.getElementById('adminDelBtn');
+      if (currentUser.username === 'admin') {
+        delBtn.classList.remove('hidden');
+        delBtn.onclick = deleteBook;
+      } else {
+        delBtn.classList.add('hidden');
+      }
+    } catch(e) {
+      showToast('خطأ في فتح الكتاب: ' + e.message);
+    }
+  }
+
+  async function deleteBook() {
+    if (!confirm('هل أنت متأكد من الحذف؟')) return;
+    const key = prompt('أدخل مفتاح المدير (ADMIN_KEY):');
+    if (!key) return;
+    try {
+      await apiFetch(`/api/books/${currentBookId}?admin_key=${encodeURIComponent(key)}`, { method: 'DELETE' });
+      showToast('تم الحذف', '#10b981');
+      closeViewer();
+      switchTab('home');
+    } catch(e) {
+      showToast('خطأ: ' + e.message);
+    }
+  }
+
+  function closeViewer() {
+    document.getElementById('pdfModal').style.display = 'none';
+    document.getElementById('pdfFrame').src = '';
+    currentBookId = null;
+  }
+
+  // ── CHAT ──────────────────────────────────────────────────────────────────
+  async function loadChat() {
+    try {
+      const msgs = await apiFetch('/api/chat');
+      const box = document.getElementById('chatBox');
+      const wasBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+      box.innerHTML = msgs.map(m => `
+        <div class="flex flex-col ${m.sender === currentUser.username ? 'items-end' : 'items-start'}">
+          <span class="text-[9px] opacity-30 mb-1 px-1">${esc(m.sender)}</span>
+          <div class="chat-bubble ${m.sender === currentUser.username ? 'bubble-user' : 'bubble-other'}">${esc(m.text)}</div>
+        </div>
+      `).join('');
+      if (wasBottom) box.scrollTop = box.scrollHeight;
+    } catch { /* silent */ }
+  }
+
+  async function sendChat() {
+    const input = document.getElementById('chatInput');
+    const text  = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    try {
+      await apiFetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sender: currentUser.username, text })
+      });
+      loadChat();
+    } catch(e) {
+      showToast('خطأ في الإرسال');
+      input.value = text;
+    }
+  }
+
+  // ── DALEEL AI ─────────────────────────────────────────────────────────────
+  async function sendDaleel() {
+    const input = document.getElementById('daleelInput');
+    const text  = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    const box = document.getElementById('daleelBox');
+    box.innerHTML += `<div class="chat-bubble bubble-user">${esc(text)}</div>`;
+    const loadId = 'ai-' + Date.now();
+    box.innerHTML += `<div id="${loadId}" class="chat-bubble bubble-ai animate-pulse">دليل يفكر...</div>`;
+    box.scrollTop = box.scrollHeight;
+    try {
+      const res  = await fetch('https://text.pollinations.ai/openai/chat/completions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [
+          { role: 'system', content: 'أنت دليل، مساعد مكتبة Iqra الذكية. أجب بالعربية باختصار ووضوح.' },
+          { role: 'user', content: text }
+        ]})
+      });
+      const data  = await res.json();
+      const reply = data.choices?.[0]?.message?.content || 'لم أفهم السؤال.';
+      document.getElementById(loadId)?.remove();
+      box.innerHTML += `<div class="chat-bubble bubble-ai whitespace-pre-wrap">${esc(reply)}</div>`;
+    } catch {
+      const el = document.getElementById(loadId);
+      if (el) el.textContent = 'خطأ في الاتصال.';
+    }
+    box.scrollTop = box.scrollHeight;
+  }
+
+  // ── THEME ─────────────────────────────────────────────────────────────────
+  function toggleTheme() { setTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark'); }
+  function setTheme(t)   { document.documentElement.classList.toggle('dark', t==='dark'); localStorage.setItem('theme', t); }
+  function setAccent(c)  { document.documentElement.style.setProperty('--accent', c); localStorage.setItem('accent', c); }
+  function setRadius(r)  { document.documentElement.style.setProperty('--radius', r); localStorage.setItem('radius', r); }
+  function loadTheme() {
+    const s = currentUser.settings || {};
+    setTheme(localStorage.getItem('theme')  || s.theme  || 'dark');
+    setAccent(localStorage.getItem('accent') || s.accent || '#3b82f6');
+    setRadius(localStorage.getItem('radius') || s.radius || '12px');
+  }
+
+  // ── MODALS ────────────────────────────────────────────────────────────────
+  function openUpload()  { resetUploadUI(); document.getElementById('uploadModal').style.display = 'flex'; }
+  function closeUpload() { resetUploadUI(); document.getElementById('uploadModal').style.display = 'none'; }
+</script>
+</body>
+</html>
