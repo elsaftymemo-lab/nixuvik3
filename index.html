@@ -31,11 +31,60 @@
     .progress-fill { height:100%; background:var(--accent); transition:width 0.3s; border-radius:2px; }
     .drop-zone { border:2px dashed #444; transition:0.2s; }
     .drop-zone.drag-over { border-color:var(--accent); background:rgba(59,130,246,0.05); }
+
+    /* ── MOBILE DRAWER ── */
+    #drawerOverlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      z-index: 1000; opacity: 0; pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    #drawerOverlay.open { opacity: 1; pointer-events: all; }
+
+    #mobileDrawer {
+      position: fixed; top: 0; right: -280px; width: 280px; height: 100%;
+      background: #0f0f0f; border-left: 1px solid #222;
+      z-index: 1001; display: flex; flex-direction: column;
+      transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      padding: 0;
+    }
+    #mobileDrawer.open { right: 0; }
   </style>
 </head>
 <body class="bg-white dark:bg-ytDark text-black dark:text-white flex h-screen overflow-hidden">
 
 <div id="toast"></div>
+
+<!-- MOBILE DRAWER OVERLAY -->
+<div id="drawerOverlay" onclick="closeDrawer()"></div>
+
+<!-- MOBILE DRAWER -->
+<div id="mobileDrawer">
+  <div class="flex items-center justify-between px-5 py-5 border-b border-gray-800">
+    <div class="flex items-center gap-3">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+        <path d="M4 19.5C4 18.1193 5.11929 17 6.5 17H20" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M6.5 2H20V22H6.5C5.11929 22 4 20.8807 4 19.5V4.5C4 3.11929 5.11929 2 6.5 2Z" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M9 7H15" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span class="text-xl font-black text-white">اقرأ</span>
+    </div>
+    <button onclick="closeDrawer()" class="text-gray-500 hover:text-white transition text-2xl leading-none">✕</button>
+  </div>
+
+  <nav class="flex-1 overflow-y-auto p-3 space-y-1">
+    <button onclick="drawerTab('home')"     class="drawer-btn w-full flex items-center gap-4 px-4 py-3 rounded-xl font-bold transition text-right" data-tab="home">🏠 الرئيسية</button>
+    <button onclick="drawerTab('library')"  class="drawer-btn w-full flex items-center gap-4 px-4 py-3 rounded-xl font-bold transition text-right" data-tab="library">📖 مكتبتي</button>
+    <button onclick="drawerTab('learning')" class="drawer-btn w-full flex items-center gap-4 px-4 py-3 rounded-xl font-bold transition text-right" data-tab="learning">🎓 التعليم</button>
+    <button onclick="drawerTab('daleel')"   class="drawer-btn w-full flex items-center gap-4 px-4 py-3 rounded-xl font-bold transition text-right" data-tab="daleel">✨ دليل</button>
+    <button onclick="drawerTab('chat')"     class="drawer-btn w-full flex items-center gap-4 px-4 py-3 rounded-xl font-bold transition text-right" data-tab="chat">💬 الدردشة</button>
+    <button onclick="drawerTab('settings')" class="drawer-btn w-full flex items-center gap-4 px-4 py-3 rounded-xl font-bold transition text-right" data-tab="settings">⚙️ الإعدادات</button>
+  </nav>
+
+  <div class="p-4 border-t border-gray-800 flex items-center gap-3">
+    <div id="drawerAvatar" class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm shrink-0" style="background:var(--accent)">G</div>
+    <p id="drawerName" class="text-sm font-bold truncate text-white">Guest</p>
+  </div>
+</div>
 
 <!-- AUTH -->
 <div id="authModal" class="fixed inset-0 bg-black/90 z-[2000] flex items-center justify-center">
@@ -84,7 +133,9 @@
 <!-- MAIN -->
 <main class="flex-1 flex flex-col h-full overflow-hidden">
   <header class="h-16 flex items-center justify-between px-6 border-b border-gray-200 dark:border-gray-800 shrink-0">
-    <div class="md:hidden font-black text-accent">اقرأ</div>
+    <button onclick="openDrawer()" class="md:hidden font-black text-accent flex items-center gap-2 hover:opacity-80 transition active:scale-95">
+      <span class="text-lg">☰</span> اقرأ
+    </button>
     <div class="flex-1 max-w-xl mx-4 hidden sm:block relative">
       <input id="searchInput" type="text" oninput="renderBooks()" placeholder="ابحث في الكتب..." class="w-full bg-gray-100 dark:bg-ytCard border border-gray-300 dark:border-gray-700 custom-radius px-10 py-2 outline-none font-bold text-sm">
       <span class="absolute right-3 top-2 opacity-30">🔍</span>
@@ -642,6 +693,41 @@
   // ── MODALS ────────────────────────────────────────────────────────────────
   function openUpload()  { resetUploadUI(); document.getElementById('uploadModal').style.display = 'flex'; }
   function closeUpload() { resetUploadUI(); document.getElementById('uploadModal').style.display = 'none'; }
+
+  // ── MOBILE DRAWER ─────────────────────────────────────────────────────────
+  function openDrawer() {
+    document.getElementById('mobileDrawer').classList.add('open');
+    document.getElementById('drawerOverlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeDrawer() {
+    document.getElementById('mobileDrawer').classList.remove('open');
+    document.getElementById('drawerOverlay').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  function drawerTab(tab) {
+    switchTab(tab);
+    // Highlight active in drawer
+    document.querySelectorAll('.drawer-btn').forEach(b => {
+      const active = b.dataset.tab === tab;
+      b.style.background = active ? 'rgba(59,130,246,0.15)' : '';
+      b.style.color = active ? 'var(--accent)' : '';
+    });
+    closeDrawer();
+  }
+
+  // Close drawer on swipe right (RTL: swipe left = close)
+  (function() {
+    let startX = 0;
+    const drawer = document.getElementById('mobileDrawer');
+    drawer.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
+    drawer.addEventListener('touchend', e => {
+      const diff = e.changedTouches[0].clientX - startX;
+      if (diff > 60) closeDrawer(); // swipe right to close (RTL feels natural)
+    }, { passive: true });
+  })();
 </script>
 </body>
 </html>
